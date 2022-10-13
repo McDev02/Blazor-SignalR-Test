@@ -1,0 +1,77 @@
+﻿@page "/websocket"
+
+@using Microsoft.AspNetCore.SignalR
+@using Microsoft.AspNetCore.SignalR.Client
+
+@inject NavigationManager NavManager
+
+@implements IAsyncDisposable
+
+<PageTitle>Websocket Test</PageTitle>
+
+<h1>Websocket Test</h1>
+@if (hubConnection == null)
+{
+    <h3>Aufbau</h3>
+}
+else
+{
+    <h3>Status: @hubConnection.State</h3>
+}
+<button class="btn btn-primary" @onclick="SendMessage">Send Message</button>
+
+@foreach (var message in Messages)
+{
+    <p>@message</p>
+}
+
+@code {
+
+    private HubConnection hubConnection;
+    private List<string> Messages { get; set; } = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var url = NavManager.ToAbsoluteUri("/chat"); //"https://localhost:7205/chat";
+        if (hubConnection == null)
+        {
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(url)
+                .Build();
+
+            hubConnection.On<string>("MESSAGE_RECEIVED", (message) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(message))
+                        OnReceiveMessage(message);
+                });
+        }
+
+        try
+        {
+            if (hubConnection.State == HubConnectionState.Disconnected)
+                await hubConnection.StartAsync();
+        }
+        catch (Exception e)
+        {
+            throw;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection != null)
+            await hubConnection.DisposeAsync();
+    }
+
+    private void OnReceiveMessage(string message)
+    {
+        Messages.Add(message);
+        StateHasChanged();
+    }
+
+    private async Task SendMessage()
+    {
+        var message = $"Blazor: {DateTime.Now.ToLongTimeString()}";
+        await hubConnection.InvokeCoreAsync("SendMessage", args: new[] { message });
+    }
+}
